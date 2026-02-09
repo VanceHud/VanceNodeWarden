@@ -9,6 +9,132 @@ import { User, Cipher, Folder, Attachment } from '../types';
 export class StorageService {
   constructor(private db: D1Database) {}
 
+  // --- Database initialization ---
+  
+  async initializeDatabase(): Promise<void> {
+    // Check if database is already initialized by looking for the config table
+    try {
+      const result = await this.db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='config'")
+        .first<{ name: string }>();
+      
+      if (result?.name === 'config') {
+        // Database already initialized
+        return;
+      }
+    } catch (e) {
+      // If error occurs, assume database needs initialization
+      console.log('Initializing database...');
+    }
+
+    // Execute initialization SQL
+    const initSQL = `
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS config (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  name TEXT,
+  master_password_hash TEXT NOT NULL,
+  key TEXT NOT NULL,
+  private_key TEXT,
+  public_key TEXT,
+  kdf_type INTEGER NOT NULL,
+  kdf_iterations INTEGER NOT NULL,
+  kdf_memory INTEGER,
+  kdf_parallelism INTEGER,
+  security_stamp TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_revisions (
+  user_id TEXT PRIMARY KEY,
+  revision_date TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ciphers (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  type INTEGER NOT NULL,
+  folder_id TEXT,
+  name TEXT,
+  notes TEXT,
+  favorite INTEGER NOT NULL DEFAULT 0,
+  data TEXT NOT NULL,
+  reprompt INTEGER,
+  key TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_ciphers_user_updated ON ciphers(user_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_ciphers_user_deleted ON ciphers(user_id, deleted_at);
+
+CREATE TABLE IF NOT EXISTS folders (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_folders_user_updated ON folders(user_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS attachments (
+  id TEXT PRIMARY KEY,
+  cipher_id TEXT,
+  file_name TEXT NOT NULL,
+  file_size INTEGER NOT NULL,
+  key TEXT,
+  data TEXT NOT NULL,
+  FOREIGN KEY (cipher_id) REFERENCES ciphers(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachments_cipher ON attachments(cipher_id);
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  token TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+  email TEXT PRIMARY KEY,
+  attempts INTEGER NOT NULL,
+  locked_until INTEGER,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS api_rate_limits (
+  identifier TEXT NOT NULL,
+  window_start INTEGER NOT NULL,
+  count INTEGER NOT NULL,
+  PRIMARY KEY (identifier, window_start)
+);
+CREATE INDEX IF NOT EXISTS idx_api_rate_window ON api_rate_limits(window_start);
+    `.trim();
+
+    // Split by semicolon and execute each statement
+    const statements = initSQL.split(';').filter(s => s.trim().length > 0);
+    
+    for (const stmt of statements) {
+      if (stmt.trim()) {
+        await this.db.prepare(stmt).run();
+      }
+    }
+    
+    console.log('Database initialized successfully');
+  }
+
   // --- Config / setup ---
 
   async isRegistered(): Promise<boolean> {
