@@ -11,11 +11,11 @@ import { handleToken, handlePrelogin, handleRevocation } from './handlers/identi
 import { handleRegister, handleGetProfile, handleUpdateProfile, handleSetKeys, handleGetRevisionDate, handleVerifyPassword } from './handlers/accounts';
 
 // Cipher handlers
-import { 
-  handleGetCiphers, 
-  handleGetCipher, 
-  handleCreateCipher, 
-  handleUpdateCipher, 
+import {
+  handleGetCiphers,
+  handleGetCipher,
+  handleCreateCipher,
+  handleUpdateCipher,
   handleDeleteCipher,
   handleDeleteCipherCompat,
   handlePermanentDeleteCipher,
@@ -25,12 +25,12 @@ import {
 } from './handlers/ciphers';
 
 // Folder handlers
-import { 
-  handleGetFolders, 
-  handleGetFolder, 
-  handleCreateFolder, 
-  handleUpdateFolder, 
-  handleDeleteFolder 
+import {
+  handleGetFolders,
+  handleGetFolder,
+  handleCreateFolder,
+  handleUpdateFolder,
+  handleDeleteFolder
 } from './handlers/folders';
 
 // Send handlers
@@ -241,6 +241,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       if (action === 'delete' && method === 'DELETE') {
         return handleAdminDeleteUserApi(request, env, targetUserId);
       }
+    }
+
     // Public Send page (recipient-facing)
     const publicSendPageMatch = path.match(/^\/send\/([^/]+)(?:\/([^/]+))?\/?$/i);
     if (publicSendPageMatch && method === 'GET') {
