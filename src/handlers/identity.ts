@@ -120,6 +120,10 @@ export async function handleToken(request: Request, env: Env): Promise<Response>
       return identityErrorResponse('Username or password is incorrect. Try again', 'invalid_grant', 400);
     }
 
+    if (user.disabled) {
+      return identityErrorResponse('This account has been disabled by administrator', 'invalid_grant', 400);
+    }
+
     const valid = await auth.verifyPassword(passwordHash, user.masterPasswordHash);
     if (!valid) {
       return recordFailedLoginAndBuildResponse(

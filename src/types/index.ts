@@ -4,6 +4,7 @@ export interface Env {
   ATTACHMENTS: R2Bucket;
   JWT_SECRET: string;
   TOTP_SECRET?: string;
+  ADMIN_TOKEN?: string;
 }
 
 // Sample JWT secret used by `.dev.vars.example`.
@@ -33,6 +34,7 @@ export interface User {
   kdfIterations: number;
   kdfMemory?: number;
   kdfParallelism?: number;
+  disabled: boolean;
   securityStamp: string;
   createdAt: string;
   updatedAt: string;

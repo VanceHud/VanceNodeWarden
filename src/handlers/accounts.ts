@@ -95,6 +95,7 @@ export async function handleRegister(request: Request, env: Env): Promise<Respon
     kdfIterations: body.kdfIterations ?? LIMITS.auth.defaultKdfIterations,
     kdfMemory: body.kdfMemory,
     kdfParallelism: body.kdfParallelism,
+    disabled: false,
     securityStamp: generateUUID(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

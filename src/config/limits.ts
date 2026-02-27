@@ -22,6 +22,17 @@
     // 账户创建与预登录回退使用的默认 PBKDF2 迭代次数。
     defaultKdfIterations: 600000,
   },
+  admin: {
+    // Admin session lifetime in milliseconds.
+    // 管理后台会话有效期（毫秒）。
+    sessionTtlMs: 8 * 60 * 60 * 1000,
+    // Max rows returned by admin audit log endpoints.
+    // 管理审计日志接口最大返回行数。
+    maxAuditRows: 200,
+    // Default pagination size for admin list endpoints.
+    // 管理后台列表接口默认分页大小。
+    defaultPageSize: 50,
+  },
   rateLimit: {
     // Max failed login attempts before temporary lock.
     // 触发临时锁定前允许的最大登录失败次数。
