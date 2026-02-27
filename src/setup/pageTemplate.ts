@@ -16,12 +16,22 @@ export function renderRegisterPageHTML(jwtState: JwtSecretState | null): string 
     (function () {
       try {
         const hash = window.location.hash || '';
-        const match = hash.match(/^#\/send\/([^/]+)\/([^/]+)\/?$/i);
-        if (!match) return;
+        if (!hash.toLowerCase().startsWith('#/send/')) return;
 
-        const accessId = encodeURIComponent(match[1]);
-        const urlB64Key = encodeURIComponent(match[2]);
-        window.location.replace('/send/' + accessId + '/' + urlB64Key);
+        const raw = hash.slice('#/send/'.length);
+        const clean = raw.split('?')[0].replace(/^\/+|\/+$/g, '');
+        if (!clean) return;
+
+        const parts = clean.split('/');
+        const accessId = (parts[0] || '').trim();
+        if (!accessId) return;
+
+        const key = parts.slice(1).join('/').trim();
+        const nextPath = key
+          ? '/send/' + encodeURIComponent(accessId) + '/' + encodeURIComponent(key)
+          : '/send/' + encodeURIComponent(accessId);
+
+        window.location.replace(nextPath);
       } catch {
         // noop
       }
