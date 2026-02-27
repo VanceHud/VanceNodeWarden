@@ -46,6 +46,9 @@
     // /api/sync read request budget per minute.
     // /api/sync 读请求每分钟配额。
     syncReadRequestsPerMinute: 1000,
+    // Public known-device probe request budget per minute (per client identifier).
+    // 公开 known-device 探测接口每分钟请求配额（按客户端标识）。
+    knownDeviceProbeRequestsPerMinute: 10,
     // Fixed window size for API rate limiting in seconds.
     // API 限流固定窗口大小（秒）。
     apiWindowSeconds: 60,
@@ -80,6 +83,14 @@
     // Max attachment upload size in bytes.
     // 附件上传大小上限（字节）。
     maxFileSizeBytes: 100 * 1024 * 1024,
+  },
+  send: {
+    // Max file size allowed for Send file uploads.
+    // Send 文件上传大小上限。
+    maxFileSizeBytes: 550_502_400,
+    // Max days allowed between now and deletion date.
+    // 允许的最远删除日期（距当前天数）。
+    maxDeletionDays: 31,
   },
   pagination: {
     // Default page size when client does not specify pageSize.

@@ -1,6 +1,6 @@
 import { Env, DEFAULT_DEV_SECRET } from './types';
 import { AuthService } from './services/auth';
-import { RateLimitService, getClientIdentifier } from './services/ratelimit';
+import { RateLimitService, getClientIdentifier, getClientIp } from './services/ratelimit';
 import { handleCors, errorResponse, jsonResponse } from './utils/response';
 import { LIMITS } from './config/limits';
 
@@ -33,6 +33,21 @@ import {
   handleDeleteFolder 
 } from './handlers/folders';
 
+// Send handlers
+import {
+  handleGetSends,
+  handleGetSend,
+  handleCreateSend,
+  handleCreateFileSendV2,
+  handleUploadSendFile,
+  handleUpdateSend,
+  handleDeleteSend,
+  handleRemoveSendPassword,
+  handleAccessSend,
+  handleAccessSendFile,
+  handleDownloadSendFile,
+} from './handlers/sends';
+
 // Sync handler
 import { handleSync } from './handlers/sync';
 
@@ -51,6 +66,7 @@ import {
   handleAdminDeleteUserApi,
   handleAdminAuditLogsApi,
 } from './handlers/admin';
+import { handlePublicSendPage } from './handlers/send-public';
 
 // Import handler
 import { handleCiphersImport } from './handlers/import';
@@ -225,6 +241,12 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       if (action === 'delete' && method === 'DELETE') {
         return handleAdminDeleteUserApi(request, env, targetUserId);
       }
+    // Public Send page (recipient-facing)
+    const publicSendPageMatch = path.match(/^\/send\/([^/]+)(?:\/([^/]+))?\/?$/i);
+    if (publicSendPageMatch && method === 'GET') {
+      const accessId = decodeURIComponent(publicSendPageMatch[1]);
+      const urlB64Key = publicSendPageMatch[2] ? decodeURIComponent(publicSendPageMatch[2]) : null;
+      return handlePublicSendPage(request, env, accessId, urlB64Key);
     }
 
     // Setup status
@@ -263,13 +285,52 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       return handlePublicDownloadAttachment(request, env, cipherId, attachmentId);
     }
 
+    // Public Send access endpoints
+    const sendAccessMatch = path.match(/^\/api\/sends\/access\/([^/]+)$/i);
+    if (sendAccessMatch && method === 'POST') {
+      const accessId = sendAccessMatch[1];
+      return handleAccessSend(request, env, accessId);
+    }
+
+    const sendAccessFileMatch = path.match(/^\/api\/sends\/([a-f0-9-]+)\/access\/file\/([a-f0-9-]+)$/i);
+    if (sendAccessFileMatch && method === 'POST') {
+      const sendId = sendAccessFileMatch[1];
+      const fileId = sendAccessFileMatch[2];
+      return handleAccessSendFile(request, env, sendId, fileId);
+    }
+
+    const sendDownloadMatch = path.match(/^\/api\/sends\/([a-f0-9-]+)\/([a-f0-9-]+)$/i);
+    if (sendDownloadMatch && method === 'GET') {
+      const sendId = sendDownloadMatch[1];
+      const fileId = sendDownloadMatch[2];
+      return handleDownloadSendFile(request, env, sendId, fileId);
+    }
+
     // Notifications hub (stub - no auth required, return 200 for connection)
     if (path.startsWith('/notifications/')) {
       return new Response(null, { status: 200 });
     }
 
-    // Known device check (no auth required)
+    // Known device check (no auth required, but strictly rate-limited)
     if (path === '/api/devices/knowndevice' && method === 'GET') {
+      const rateLimit = new RateLimitService(env.DB);
+      const clientIp = getClientIp(request) || 'unknown-ip';
+      const rateLimitCheck = await rateLimit.consumeKnownDeviceProbeBudget(clientIp + ':known-device');
+
+      if (!rateLimitCheck.allowed) {
+        return new Response(JSON.stringify({
+          error: 'Too many requests',
+          error_description: `Known-device probe rate limit exceeded. Try again in ${rateLimitCheck.retryAfterSeconds} seconds.`,
+        }), {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': rateLimitCheck.retryAfterSeconds!.toString(),
+            'X-RateLimit-Remaining': '0',
+          },
+        });
+      }
+
       return handleKnownDevice(request, env);
     }
 
@@ -558,10 +619,35 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       }
     }
 
-    // Sends endpoint (stub - not implemented)
-    if (path === '/api/sends' || path.startsWith('/api/sends/')) {
-      if (method === 'GET') {
-        return jsonResponse({ data: [], object: 'list', continuationToken: null });
+    // Send endpoints
+    if (path === '/api/sends') {
+      if (method === 'GET') return handleGetSends(request, env, userId);
+      if (method === 'POST') return handleCreateSend(request, env, userId);
+    }
+
+    if (path === '/api/sends/file/v2' && method === 'POST') {
+      return handleCreateFileSendV2(request, env, userId);
+    }
+
+    const sendMatch = path.match(/^\/api\/sends\/([a-f0-9-]+)(\/.*)?$/i);
+    if (sendMatch) {
+      const sendId = sendMatch[1];
+      const subPath = sendMatch[2] || '';
+
+      if (subPath === '' || subPath === '/') {
+        if (method === 'GET') return handleGetSend(request, env, userId, sendId);
+        if (method === 'PUT') return handleUpdateSend(request, env, userId, sendId);
+        if (method === 'DELETE') return handleDeleteSend(request, env, userId, sendId);
+      }
+
+      if (subPath === '/remove-password' && method === 'PUT') {
+        return handleRemoveSendPassword(request, env, userId, sendId);
+      }
+
+      const sendFileUploadMatch = subPath.match(/^\/file\/([a-f0-9-]+)$/i);
+      if (sendFileUploadMatch && method === 'POST') {
+        const fileId = sendFileUploadMatch[1];
+        return handleUploadSendFile(request, env, userId, sendId, fileId);
       }
     }
 
