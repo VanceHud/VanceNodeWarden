@@ -241,6 +241,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       if (action === 'delete' && method === 'DELETE') {
         return handleAdminDeleteUserApi(request, env, targetUserId);
       }
+    }
+
     // Public Send page (recipient-facing)
     const publicSendPageMatch = path.match(/^\/send\/([^/]+)(?:\/([^/]+))?\/?$/i);
     if (publicSendPageMatch && method === 'GET') {
