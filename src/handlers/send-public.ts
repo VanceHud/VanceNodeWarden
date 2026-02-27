@@ -418,7 +418,8 @@ function renderPublicSendPage(accessId: string, urlB64Key: string | null): strin
 
     function renderMeta(send) {
       const creator = send.creatorIdentifier ? ('创建者: ' + send.creatorIdentifier) : '创建者已隐藏';
-      const exp = send.expirationDate ? ('到期时间: ' + new Date(send.expirationDate).toLocaleString()) : '到期时间: 未设置';
+      const effectiveExpirationDate = send.expirationDate || send.deletionDate || null;
+      const exp = effectiveExpirationDate ? ('到期时间: ' + new Date(effectiveExpirationDate).toLocaleString()) : '到期时间: 未设置';
       byId('sendMeta').textContent = creator + ' · ' + exp;
     }
 
@@ -493,7 +494,8 @@ function renderPublicSendPage(accessId: string, urlB64Key: string | null): strin
       const sendType = Number(getProp(payload, ['type', 'Type']));
       const encryptedName = getProp(payload, ['name', 'Name']);
       const creatorIdentifier = getProp(payload, ['creatorIdentifier', 'CreatorIdentifier']) || null;
-      const expirationDate = getProp(payload, ['expirationDate', 'ExpirationDate']) || null;
+      const expirationDate = getProp(payload, ['expirationDate', 'ExpirationDate', 'expiration_date']) || null;
+      const deletionDate = getProp(payload, ['deletionDate', 'DeletionDate', 'deletion_date']) || null;
       const sendId = getProp(payload, ['id', 'Id']);
 
       const decryptedName = await decryptEncString(encryptedName);
@@ -504,6 +506,7 @@ function renderPublicSendPage(accessId: string, urlB64Key: string | null): strin
         type: sendType,
         creatorIdentifier,
         expirationDate,
+        deletionDate,
       };
 
       renderMeta(activeSend);

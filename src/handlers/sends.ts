@@ -275,6 +275,7 @@ function sendToAccessResponse(send: Send, creatorIdentifier: string | null): Rec
     text: send.type === SendType.Text ? data : null,
     file: send.type === SendType.File ? data : null,
     expirationDate: send.expirationDate,
+    deletionDate: send.deletionDate,
     creatorIdentifier,
     object: 'send-access',
   };
