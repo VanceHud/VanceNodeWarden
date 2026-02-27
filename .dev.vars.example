@@ -3,3 +3,21 @@
 # Generate one with: openssl rand -hex 32
 # (Example only, 64 hex chars = 32 bytes)
 JWT_SECRET=Enter-your-JWT-key-here-at-least-32-characters
+
+# --- Optional: Admin database backup destinations ---
+# Provider selection and schedule are configured via admin API,
+# but credentials/endpoints must come from environment variables.
+
+# WebDAV backup destination
+# BACKUP_WEBDAV_URL=https://example.com/remote.php/dav/files/username/nodewarden-backups
+# BACKUP_WEBDAV_USERNAME=your-webdav-username
+# BACKUP_WEBDAV_PASSWORD=your-webdav-password
+
+# S3 backup destination
+# BACKUP_S3_ENDPOINT=https://s3.us-east-1.amazonaws.com
+# BACKUP_S3_REGION=us-east-1
+# BACKUP_S3_BUCKET=your-backup-bucket
+# BACKUP_S3_ACCESS_KEY_ID=your-access-key-id
+# BACKUP_S3_SECRET_ACCESS_KEY=your-secret-access-key
+# BACKUP_S3_SESSION_TOKEN=optional-session-token
+# BACKUP_S3_FORCE_PATH_STYLE=false

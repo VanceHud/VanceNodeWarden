@@ -33,6 +33,29 @@
     // 管理后台列表接口默认分页大小。
     defaultPageSize: 50,
   },
+  backup: {
+    // Minimum allowed backup interval in minutes.
+    // 自动备份间隔最小值（分钟）。
+    minIntervalMinutes: 5,
+    // Maximum allowed backup interval in minutes.
+    // 自动备份间隔最大值（分钟）。
+    maxIntervalMinutes: 7 * 24 * 60,
+    // Default backup interval in minutes.
+    // 自动备份默认间隔（分钟）。
+    defaultIntervalMinutes: 24 * 60,
+    // Soft timeout budget for one backup run.
+    // 单次备份运行的超时预算（毫秒）。
+    runTimeoutMs: 15 * 60 * 1000,
+    // Lease duration used to prevent concurrent backup runs.
+    // 防并发备份租约时长（毫秒）。
+    leaseTtlMs: 10 * 60 * 1000,
+    // Maximum serialized backup payload size.
+    // 备份序列化后的最大载荷大小（字节）。
+    maxPayloadBytes: 50 * 1024 * 1024,
+    // Max length accepted for backup path prefix.
+    // 备份路径前缀最大长度。
+    maxPathPrefixLength: 200,
+  },
   rateLimit: {
     // Max failed login attempts before temporary lock.
     // 触发临时锁定前允许的最大登录失败次数。

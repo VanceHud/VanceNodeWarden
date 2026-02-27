@@ -11,11 +11,11 @@ import { handleToken, handlePrelogin, handleRevocation } from './handlers/identi
 import { handleRegister, handleGetProfile, handleUpdateProfile, handleSetKeys, handleGetRevisionDate, handleVerifyPassword } from './handlers/accounts';
 
 // Cipher handlers
-import { 
-  handleGetCiphers, 
-  handleGetCipher, 
-  handleCreateCipher, 
-  handleUpdateCipher, 
+import {
+  handleGetCiphers,
+  handleGetCipher,
+  handleCreateCipher,
+  handleUpdateCipher,
   handleDeleteCipher,
   handleDeleteCipherCompat,
   handlePermanentDeleteCipher,
@@ -25,12 +25,12 @@ import {
 } from './handlers/ciphers';
 
 // Folder handlers
-import { 
-  handleGetFolders, 
-  handleGetFolder, 
-  handleCreateFolder, 
-  handleUpdateFolder, 
-  handleDeleteFolder 
+import {
+  handleGetFolders,
+  handleGetFolder,
+  handleCreateFolder,
+  handleUpdateFolder,
+  handleDeleteFolder
 } from './handlers/folders';
 
 // Send handlers
@@ -59,6 +59,9 @@ import {
   handleAdminLogin,
   handleAdminLogout,
   handleAdminOverviewApi,
+  handleAdminBackupApi,
+  handleAdminBackupSettingsApi,
+  handleAdminBackupRunApi,
   handleAdminUsersApi,
   handleAdminDisableUserApi,
   handleAdminEnableUserApi,
@@ -222,6 +225,18 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
     if (path === '/admin/api/audit-logs' && method === 'GET') {
       return handleAdminAuditLogsApi(request, env);
+    }
+
+    if (path === '/admin/api/backup' && method === 'GET') {
+      return handleAdminBackupApi(request, env);
+    }
+
+    if (path === '/admin/api/backup/settings' && method === 'POST') {
+      return handleAdminBackupSettingsApi(request, env);
+    }
+
+    if (path === '/admin/api/backup/run' && method === 'POST') {
+      return handleAdminBackupRunApi(request, env);
     }
 
     const adminUserActionMatch = path.match(/^\/admin\/api\/users\/([a-f0-9-]+)\/(disable|enable|deauth|delete)$/i);

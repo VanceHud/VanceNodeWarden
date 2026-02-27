@@ -1,6 +1,7 @@
 import { Env } from './types';
 import { handleRequest } from './router';
 import { StorageService } from './services/storage';
+import { runScheduledBackupIfDue } from './services/backup';
 import { applyCors, jsonResponse } from './utils/response';
 
 let dbInitialized = false;
@@ -50,5 +51,22 @@ export default {
 
     const resp = await handleRequest(request, env);
     return applyCors(request, resp);
+  },
+
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    void controller;
+
+    await ensureDatabaseInitialized(env);
+    if (dbInitError) {
+      console.error('Scheduled task skipped: database not initialized', dbInitError);
+      return;
+    }
+
+    ctx.waitUntil((async () => {
+      const result = await runScheduledBackupIfDue(env);
+      if (result.status === 'failure') {
+        console.error('Scheduled backup failed:', result.state.lastError || 'unknown error');
+      }
+    })());
   },
 };

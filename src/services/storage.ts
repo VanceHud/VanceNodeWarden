@@ -240,15 +240,44 @@ export class StorageService {
 
   // --- Config / setup ---
 
+  async getConfigValue(key: string): Promise<string | null> {
+    const row = await this.db.prepare('SELECT value FROM config WHERE key = ?').bind(key).first<{ value: string }>();
+    return row?.value ?? null;
+  }
+
+  async setConfigValue(key: string, value: string): Promise<void> {
+    await this.db
+      .prepare('INSERT INTO config(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .bind(key, value)
+      .run();
+  }
+
+  async insertConfigValueIfAbsent(key: string, value: string): Promise<boolean> {
+    const result = await this.db
+      .prepare('INSERT INTO config(key, value) VALUES(?, ?) ON CONFLICT(key) DO NOTHING')
+      .bind(key, value)
+      .run();
+    return (result.meta.changes ?? 0) > 0;
+  }
+
+  async updateConfigValueIfMatch(key: string, expectedValue: string, nextValue: string): Promise<boolean> {
+    const result = await this.db
+      .prepare('UPDATE config SET value = ? WHERE key = ? AND value = ?')
+      .bind(nextValue, key, expectedValue)
+      .run();
+    return (result.meta.changes ?? 0) > 0;
+  }
+
+  async deleteConfigValue(key: string): Promise<void> {
+    await this.db.prepare('DELETE FROM config WHERE key = ?').bind(key).run();
+  }
+
   async isRegistered(): Promise<boolean> {
-    const row = await this.db.prepare('SELECT value FROM config WHERE key = ?').bind('registered').first<{ value: string }>();
-    return row?.value === 'true';
+    return (await this.getConfigValue('registered')) === 'true';
   }
 
   async setRegistered(): Promise<void> {
-    await this.db.prepare('INSERT INTO config(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-      .bind('registered', 'true')
-      .run();
+    await this.setConfigValue('registered', 'true');
   }
 
   // --- Users ---
