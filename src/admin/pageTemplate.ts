@@ -33,127 +33,18 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
 
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body {
-      margin: 0;
-      color: var(--text);
-      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background:
-        radial-gradient(1200px 700px at 80% -20%, rgba(37, 99, 235, 0.22), transparent 60%),
-        radial-gradient(900px 600px at -20% 10%, rgba(99, 102, 241, 0.2), transparent 55%),
-        var(--bg);
-      min-height: 100%;
-      padding: 28px;
+    .form-group {
+      margin-bottom: 16px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      color: #cbd5e1;
     }
 
-    .shell {
-      width: min(1240px, 100%);
-      margin: 0 auto;
-      border: 1px solid var(--line);
-      background: linear-gradient(180deg, rgba(15,23,42,.78), rgba(2,6,23,.74));
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      padding: 18px 22px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(15, 23, 42, 0.65);
-    }
-
-    .brand {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      font-weight: 700;
-      letter-spacing: .2px;
-    }
-
-    .logo {
-      width: 38px;
-      height: 38px;
-      border-radius: 11px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(135deg, #2563eb, #60a5fa);
-      color: #fff;
-      font-size: 14px;
-      font-weight: 800;
-      box-shadow: 0 8px 20px rgba(37, 99, 235, .45);
-      user-select: none;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      background: var(--warning);
-    }
-
-    .badge.ok .dot { background: var(--success); }
-
-    .content {
-      padding: 22px;
-      display: grid;
-      gap: 18px;
-    }
-
-    .notice {
-      display: none;
-      padding: 12px 14px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--line);
-      background: rgba(15, 23, 42, 0.8);
-      font-size: 14px;
-    }
-
-    .notice.show { display: block; }
-    .notice.error { border-color: rgba(239, 68, 68, .4); color: #fecaca; background: rgba(127, 29, 29, .25); }
-    .notice.success { border-color: rgba(34, 197, 94, .35); color: #bbf7d0; background: rgba(22, 101, 52, .25); }
-
-    .card {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--card);
-      padding: 16px;
-    }
-
-    .card h2 {
-      margin: 0 0 10px 0;
-      font-size: 18px;
-      letter-spacing: .2px;
-    }
-
-    .muted { color: var(--muted); }
-    .mono { font-family: var(--mono); }
-
-    .form-row {
-      display: grid;
-      gap: 10px;
-      grid-template-columns: 1fr auto;
-      align-items: center;
-    }
-
-    input {
+    input, select {
       width: 100%;
       height: 42px;
       border-radius: 11px;
@@ -165,9 +56,15 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
       transition: border-color .15s ease, box-shadow .15s ease;
     }
 
-    input:focus {
+    input:focus, select:focus {
       border-color: rgba(96, 165, 250, .9);
       box-shadow: 0 0 0 4px rgba(59, 130, 246, .2);
+    }
+    
+    input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin: 0;
     }
 
     .btn {
@@ -180,6 +77,10 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
       font-weight: 600;
       cursor: pointer;
       transition: all .15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
     }
 
     .btn:hover { transform: translateY(-1px); }
@@ -293,6 +194,8 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
     }
 
     .chip.warn { color: #fcd34d; border-color: rgba(245, 158, 11, .5); }
+    .chip.danger { color: #fecaca; border-color: rgba(239, 68, 68, .5); }
+    .chip.success { color: #bbf7d0; border-color: rgba(34, 197, 94, .5); }
 
     .audit-list {
       display: grid;
@@ -337,6 +240,8 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
 
     .hidden { display: none !important; }
 
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
     @media (max-width: 1080px) {
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
@@ -346,6 +251,7 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
       .topbar, .content { padding: 14px; }
       .form-row { grid-template-columns: 1fr; }
       .stats { grid-template-columns: 1fr; }
+      .grid-2 { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -387,6 +293,7 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
           <div class="tabs" id="tabs">
             <button class="tab-btn active" data-tab="overview">总览</button>
             <button class="tab-btn" data-tab="users">用户</button>
+            <button class="tab-btn" data-tab="backup">备份</button>
             <button class="tab-btn" data-tab="audit">审计日志</button>
           </div>
           <button id="refreshBtn" class="btn" type="button">刷新数据</button>
@@ -421,6 +328,56 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
                 <tbody id="usersBody"></tbody>
               </table>
             </div>
+          </div>
+        </div>
+
+        <div id="tab-backup" class="tab-pane">
+          <div class="grid-2">
+            <div class="card">
+              <h2>备份状态</h2>
+              <div id="backupStatus" style="display:grid; gap:12px;"></div>
+            </div>
+            
+            <div class="card">
+              <h2>最近一次运行</h2>
+              <div id="lastBackup" style="display:grid; gap:12px;"></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <h2>备份设置</h2>
+              <button id="backupRunBtn" class="btn primary">立即运行备份</button>
+            </div>
+            <form id="backupForm" style="display:grid; gap:16px; max-width:600px;">
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                <input type="checkbox" id="backupEnabled" />
+                <label for="backupEnabled" style="margin:0; cursor:pointer;">启用自动备份</label>
+              </div>
+
+              <div class="form-group">
+                <label>备份间隔 (分钟)</label>
+                <input type="number" id="backupInterval" min="5" placeholder="默认 1440 (24小时)" />
+                <div class="muted" style="font-size:12px; margin-top:4px;">最小 5 分钟。建议设置为 60 分钟以上，避免过于频繁。</div>
+              </div>
+
+              <div class="form-group">
+                <label>存储服务商 (Provider)</label>
+                <select id="backupProvider">
+                  <option value="s3">AWS S3 / 兼容 S3 的存储 (R2)</option>
+                  <option value="webdav">WebDAV</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>存储路径前缀</label>
+                <input type="text" id="backupPath" placeholder="例如: backups/ (留空默认为 backups/)" />
+              </div>
+              
+              <div>
+                <button type="submit" class="btn primary">保存设置</button>
+              </div>
+            </form>
           </div>
         </div>
 
@@ -468,11 +425,23 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
 
       if (!response.ok) {
         let message = '请求失败';
+        let errorData = null;
         try {
           const data = await response.json();
-          message = data.error_description || data.error || message;
-        } catch {}
-        throw new Error(message);
+          errorData = data;
+          if (data && typeof data === 'object') {
+            message = data.error_description || data.error || data.message || message;
+          }
+        } catch (parseError) {
+          void parseError;
+        }
+
+        const error = new Error(message);
+        Object.assign(error, {
+          status: response.status,
+          data: errorData,
+        });
+        throw error;
       }
 
       const text = await response.text();
@@ -498,6 +467,17 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
       if (b < 1024 * 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
       return (b / 1024 / 1024 / 1024).toFixed(2) + ' GB';
     }
+    
+    function timeAgo(dateStr) {
+      if (!dateStr) return '-';
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return '-';
+      const sec = Math.floor((Date.now() - d.getTime()) / 1000);
+      if (sec < 60) return sec + '秒前';
+      if (sec < 3600) return Math.floor(sec/60) + '分钟前';
+      if (sec < 86400) return Math.floor(sec/3600) + '小时前';
+      return Math.floor(sec/86400) + '天前';
+    }
 
     function statCard(label, value, desc) {
       return '<div class="stat">'
@@ -505,6 +485,13 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
         + '<div class="v">' + value + '</div>'
         + '<div class="muted" style="font-size:12px; margin-top:4px;">' + (desc || '') + '</div>'
         + '</div>';
+    }
+    
+    function detailItem(label, value) {
+        return '<div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding:8px 0;">'
+          + '<span class="muted">' + label + '</span>'
+          + '<span style="font-weight:500;">' + value + '</span>'
+          + '</div>';
     }
 
     async function loadOverview() {
@@ -587,10 +574,137 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
           + '</article>';
       }).join('');
     }
+    
+    async function loadBackup() {
+      const data = await api('/admin/api/backup');
+      const status = data.status || {};
+      const state = data.state || {};
+      const config = data.settings || {};
+      
+      // Update form
+      document.getElementById('backupEnabled').checked = !!config.enabled;
+      document.getElementById('backupInterval').value = config.intervalMinutes || 1440;
+      document.getElementById('backupProvider').value = config.provider || 's3';
+      document.getElementById('backupPath').value = config.pathPrefix || '';
+      
+      // Update Status Panel
+      const statusEl = document.getElementById('backupStatus');
+      const statusChip = config.enabled 
+        ? '<span class="chip success">已启用</span>' 
+        : '<span class="chip warn">已停用</span>';
+        
+      let envChip = '<span class="chip success">配置正常</span>';
+      if (!status.providerConfigured) {
+        const missing = (status.providerMissingEnv || []).join(', ');
+        envChip = '<span class="chip danger" title="缺少: ' + missing + '">配置缺失</span>';
+      }
+        
+      statusEl.innerHTML = [
+        detailItem('功能状态', statusChip),
+        detailItem('当前运行', status.isRunning ? '<span class="chip warn">进行中</span>' : '<span class="chip">空闲</span>'),
+        detailItem('到期状态', status.isDue ? '<span class="chip warn">已到期</span>' : '<span class="chip">未到期</span>'),
+        detailItem('环境配置', envChip),
+        detailItem('下次运行', status.nextDueAt ? formatTime(status.nextDueAt) + ' (' + timeAgo(status.nextDueAt).replace('前', '后') + ')' : '未计划'),
+        detailItem('存储服务商', (config.provider || 's3').toUpperCase()),
+      ].join('');
+      
+      // Update Last Run Panel
+      const lastRunEl = document.getElementById('lastBackup');
+      if (!state.lastRunAt) {
+        lastRunEl.innerHTML = '<div class="muted">暂无备份记录</div>';
+      } else {
+        let runStatus = '<span class="chip">未知</span>';
+        if (state.lastStatus === 'success') runStatus = '<span class="chip success">成功</span>';
+        else if (state.lastStatus === 'failure') runStatus = '<span class="chip danger">失败</span>';
+        else if (state.lastStatus === 'skipped') runStatus = '<span class="chip warn">跳过</span>';
+          
+        lastRunEl.innerHTML = [
+          detailItem('运行状态', runStatus),
+          detailItem('完成时间', formatTime(state.lastRunAt)),
+          detailItem('耗时', (state.lastDurationMs || 0) + ' ms'),
+          detailItem('附件数量', typeof state.lastAttachmentCount === 'number' ? state.lastAttachmentCount : '-'),
+          detailItem('附件体积', typeof state.lastAttachmentBytes === 'number' ? formatBytes(state.lastAttachmentBytes) : '-'),
+          detailItem('大小', formatBytes(state.lastSizeBytes)),
+          detailItem('文件路径', '<span class="mono" style="font-size:12px; word-break:break-all;">' + (state.lastFileName || state.lastLocation || '-') + '</span>'),
+          state.lastError ? '<div style="color:var(--danger); font-size:12px; margin-top:8px;">错误: ' + state.lastError + '</div>' : ''
+        ].join('');
+      }
+    }
+    
+    async function saveBackupSettings(e) {
+      e.preventDefault();
+      const btn = e.submitter;
+      if (btn) {
+         btn.disabled = true;
+         btn.textContent = '保存中...';
+      }
+      
+      try {
+        const payload = {
+          enabled: document.getElementById('backupEnabled').checked,
+          intervalMinutes: parseInt(document.getElementById('backupInterval').value) || 1440,
+          provider: document.getElementById('backupProvider').value,
+          pathPrefix: document.getElementById('backupPath').value,
+        };
+        
+        await api('/admin/api/backup/settings', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        
+        setNotice('设置已保存', 'success');
+        await loadBackup();
+      } catch (err) {
+        setNotice(err.message || '保存失败', 'error');
+      } finally {
+        if (btn) {
+           btn.disabled = false;
+           btn.textContent = '保存设置';
+        }
+      }
+    }
+    
+    async function runBackup() {
+      const btn = document.getElementById('backupRunBtn');
+      if (!confirm('确定要立即运行一次备份吗？这可能需要几分钟。')) return;
+      
+      btn.disabled = true;
+      btn.textContent = '备份中...';
+      
+      try {
+        const res = await api('/admin/api/backup/run', { method: 'POST' });
+        if (res && res.status === 'skipped') {
+             setNotice('备份跳过', 'warning');
+        } else if (res && res.status === 'failure') {
+             setNotice('备份失败', 'error');
+        } else {
+             setNotice('备份成功！', 'success');
+        }
+        await loadBackup();
+      } catch (err) {
+        const statusCode = (err && typeof err === 'object' && 'status' in err)
+          ? Number(err.status)
+          : 0;
+        const errorData = (err && typeof err === 'object' && 'data' in err && err.data && typeof err.data === 'object')
+          ? err.data
+          : null;
+
+        const skippedFromBody = errorData && errorData.status === 'skipped';
+        if (statusCode === 409 || skippedFromBody) {
+          setNotice('备份跳过: 正在运行或当前无需执行', 'warning');
+        } else {
+          setNotice((err && err.message) || '备份失败', 'error');
+        }
+        await loadBackup();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '立即运行备份';
+      }
+    }
 
     async function refreshAll() {
       setNotice('正在刷新数据...', '');
-      await Promise.all([loadOverview(), loadUsers(), loadAudit()]);
+      await Promise.all([loadOverview(), loadUsers(), loadAudit(), loadBackup()]);
       setNotice('数据已更新', 'success');
       setTimeout(() => setNotice(''), 1200);
     }
@@ -660,6 +774,9 @@ export function renderAdminPageHTML(state: AdminPageRenderState): string {
           setNotice(err.message || '退出失败', 'error');
         }
       });
+      
+      document.getElementById('backupForm').addEventListener('submit', saveBackupSettings);
+      document.getElementById('backupRunBtn').addEventListener('click', runBackup);
 
       await refreshAll();
     }

@@ -5,6 +5,16 @@ export interface Env {
   JWT_SECRET: string;
   TOTP_SECRET?: string;
   ADMIN_TOKEN?: string;
+  BACKUP_WEBDAV_URL?: string;
+  BACKUP_WEBDAV_USERNAME?: string;
+  BACKUP_WEBDAV_PASSWORD?: string;
+  BACKUP_S3_ENDPOINT?: string;
+  BACKUP_S3_REGION?: string;
+  BACKUP_S3_BUCKET?: string;
+  BACKUP_S3_ACCESS_KEY_ID?: string;
+  BACKUP_S3_SECRET_ACCESS_KEY?: string;
+  BACKUP_S3_SESSION_TOKEN?: string;
+  BACKUP_S3_FORCE_PATH_STYLE?: string;
 }
 
 // Sample JWT secret used by `.dev.vars.example`.

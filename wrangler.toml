@@ -2,6 +2,10 @@ name = "nodewarden"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
+[triggers]
+# Scheduled heartbeat for automatic backup due-check.
+crons = ["*/5 * * * *"]
+
 # D1 Database for storing vault data
 [[d1_databases]]
 binding = "DB"

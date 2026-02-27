@@ -7,6 +7,7 @@ import { getClientIdentifier } from '../services/ratelimit';
 import { generateUUID } from '../utils/uuid';
 import { renderAdminPageHTML } from '../admin/pageTemplate';
 import { isTotpEnabled } from '../utils/totp';
+import { getBackupOverview, runBackupNow, updateBackupSettings, validateBackupSettingsPatch } from '../services/backup';
 
 const ADMIN_COOKIE_NAME = 'NW_ADMIN';
 
@@ -327,4 +328,48 @@ export async function handleAdminAuditLogsApi(request: Request, env: Env): Promi
     object: 'list',
     continuationToken: null,
   });
+}
+
+export async function handleAdminBackupApi(request: Request, env: Env): Promise<Response> {
+  const auth = await requireAdminApiSession(request, env);
+  if (auth.response) return auth.response;
+
+  const overview = await getBackupOverview(env);
+  return jsonResponse(overview);
+}
+
+export async function handleAdminBackupSettingsApi(request: Request, env: Env): Promise<Response> {
+  const auth = await requireAdminApiSession(request, env);
+  if (auth.response) return auth.response;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse('Invalid JSON', 400);
+  }
+
+  const validation = validateBackupSettingsPatch(body);
+  if (!validation.ok) {
+    return errorResponse(validation.message, 400);
+  }
+
+  const overview = await updateBackupSettings(env, validation.patch, auth.ctx!.ip);
+  return jsonResponse(overview);
+}
+
+export async function handleAdminBackupRunApi(request: Request, env: Env): Promise<Response> {
+  const auth = await requireAdminApiSession(request, env);
+  if (auth.response) return auth.response;
+
+  const result = await runBackupNow(env, auth.ctx!.ip);
+  if (result.status === 'success') {
+    return jsonResponse(result, 200);
+  }
+
+  if (result.status === 'skipped') {
+    return jsonResponse(result, 409);
+  }
+
+  return jsonResponse(result, 500);
 }
