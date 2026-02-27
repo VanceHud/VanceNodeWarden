@@ -1,7 +1,44 @@
 import { User, Cipher, Folder, Attachment, Device } from '../types';
 import { LIMITS } from '../config/limits';
+import { generateUUID } from '../utils/uuid';
 
 const TWO_FACTOR_REMEMBER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export interface AdminUserOverview {
+  id: string;
+  email: string;
+  name: string | null;
+  disabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  cipherCount: number;
+  folderCount: number;
+  deviceCount: number;
+  attachmentCount: number;
+  attachmentSize: number;
+}
+
+export interface AdminOverviewStats {
+  usersTotal: number;
+  usersDisabled: number;
+  ciphersTotal: number;
+  ciphersDeleted: number;
+  foldersTotal: number;
+  devicesTotal: number;
+  attachmentsTotal: number;
+  attachmentsBytesTotal: number;
+  adminSessionsTotal: number;
+}
+
+export interface AdminAuditLog {
+  id: string;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  ip: string | null;
+  detail: Record<string, unknown> | null;
+  createdAt: string;
+}
 
 // IMPORTANT:
 // Keep this schema list in sync with migrations/0001_init.sql.
@@ -10,8 +47,9 @@ const SCHEMA_STATEMENTS: readonly string[] = [
   'CREATE TABLE IF NOT EXISTS users (' +
   'id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT, master_password_hash TEXT NOT NULL, ' +
   'key TEXT NOT NULL, private_key TEXT, public_key TEXT, kdf_type INTEGER NOT NULL, ' +
-  'kdf_iterations INTEGER NOT NULL, kdf_memory INTEGER, kdf_parallelism INTEGER, ' +
+  'kdf_iterations INTEGER NOT NULL, kdf_memory INTEGER, kdf_parallelism INTEGER, disabled INTEGER NOT NULL DEFAULT 0, ' +
   'security_stamp TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)',
+  'ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0',
 
   'CREATE TABLE IF NOT EXISTS user_revisions (' +
   'user_id TEXT PRIMARY KEY, revision_date TEXT NOT NULL, ' +
@@ -63,6 +101,14 @@ const SCHEMA_STATEMENTS: readonly string[] = [
 
   'CREATE TABLE IF NOT EXISTS used_attachment_download_tokens (' +
   'jti TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)',
+
+  'CREATE TABLE IF NOT EXISTS admin_sessions (' +
+  'token TEXT PRIMARY KEY, ip TEXT, user_agent TEXT, created_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)',
+  'CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at)',
+
+  'CREATE TABLE IF NOT EXISTS admin_audit_logs (' +
+  'id TEXT PRIMARY KEY, action TEXT NOT NULL, target_type TEXT, target_id TEXT, ip TEXT, detail TEXT, created_at TEXT NOT NULL)',
+  'CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created_at ON admin_audit_logs(created_at)',
 ];
 
 // D1-backed storage.
@@ -76,10 +122,12 @@ export class StorageService {
   private static schemaVerified = false;
   private static lastRefreshTokenCleanupAt = 0;
   private static lastAttachmentTokenCleanupAt = 0;
+  private static lastAdminSessionCleanupAt = 0;
 
   private static readonly REFRESH_TOKEN_CLEANUP_INTERVAL_MS = LIMITS.cleanup.refreshTokenCleanupIntervalMs;
   private static readonly ATTACHMENT_TOKEN_CLEANUP_INTERVAL_MS = LIMITS.cleanup.attachmentTokenCleanupIntervalMs;
   private static readonly PERIODIC_CLEANUP_PROBABILITY = LIMITS.cleanup.cleanupProbability;
+  private static readonly ADMIN_SESSION_CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
 
   constructor(private db: D1Database) {}
 
@@ -117,6 +165,15 @@ export class StorageService {
 
     await this.db.prepare('DELETE FROM refresh_tokens WHERE expires_at < ?').bind(nowMs).run();
     StorageService.lastRefreshTokenCleanupAt = nowMs;
+  }
+
+  private async maybeCleanupExpiredAdminSessions(nowMs: number): Promise<void> {
+    if (!this.shouldRunPeriodicCleanup(StorageService.lastAdminSessionCleanupAt, StorageService.ADMIN_SESSION_CLEANUP_INTERVAL_MS)) {
+      return;
+    }
+
+    await this.db.prepare('DELETE FROM admin_sessions WHERE expires_at < ?').bind(nowMs).run();
+    StorageService.lastAdminSessionCleanupAt = nowMs;
   }
 
   // --- Database initialization ---
@@ -167,7 +224,7 @@ export class StorageService {
   async getUser(email: string): Promise<User | null> {
     const row = await this.db
       .prepare(
-        'SELECT id, email, name, master_password_hash, key, private_key, public_key, kdf_type, kdf_iterations, kdf_memory, kdf_parallelism, security_stamp, created_at, updated_at FROM users WHERE email = ?'
+        'SELECT id, email, name, master_password_hash, key, private_key, public_key, kdf_type, kdf_iterations, kdf_memory, kdf_parallelism, disabled, security_stamp, created_at, updated_at FROM users WHERE email = ?'
       )
       .bind(email.toLowerCase())
       .first<any>();
@@ -184,6 +241,7 @@ export class StorageService {
       kdfIterations: row.kdf_iterations,
       kdfMemory: row.kdf_memory ?? undefined,
       kdfParallelism: row.kdf_parallelism ?? undefined,
+      disabled: !!row.disabled,
       securityStamp: row.security_stamp,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -193,7 +251,7 @@ export class StorageService {
   async getUserById(id: string): Promise<User | null> {
     const row = await this.db
       .prepare(
-        'SELECT id, email, name, master_password_hash, key, private_key, public_key, kdf_type, kdf_iterations, kdf_memory, kdf_parallelism, security_stamp, created_at, updated_at FROM users WHERE id = ?'
+        'SELECT id, email, name, master_password_hash, key, private_key, public_key, kdf_type, kdf_iterations, kdf_memory, kdf_parallelism, disabled, security_stamp, created_at, updated_at FROM users WHERE id = ?'
       )
       .bind(id)
       .first<any>();
@@ -210,6 +268,7 @@ export class StorageService {
       kdfIterations: row.kdf_iterations,
       kdfMemory: row.kdf_memory ?? undefined,
       kdfParallelism: row.kdf_parallelism ?? undefined,
+      disabled: !!row.disabled,
       securityStamp: row.security_stamp,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -219,11 +278,11 @@ export class StorageService {
   async saveUser(user: User): Promise<void> {
     const email = user.email.toLowerCase();
     const stmt = this.db.prepare(
-      'INSERT INTO users(id, email, name, master_password_hash, key, private_key, public_key, kdf_type, kdf_iterations, kdf_memory, kdf_parallelism, security_stamp, created_at, updated_at) ' +
-      'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
+      'INSERT INTO users(id, email, name, master_password_hash, key, private_key, public_key, kdf_type, kdf_iterations, kdf_memory, kdf_parallelism, disabled, security_stamp, created_at, updated_at) ' +
+      'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
       'ON CONFLICT(id) DO UPDATE SET ' +
       'email=excluded.email, name=excluded.name, master_password_hash=excluded.master_password_hash, key=excluded.key, private_key=excluded.private_key, public_key=excluded.public_key, ' +
-      'kdf_type=excluded.kdf_type, kdf_iterations=excluded.kdf_iterations, kdf_memory=excluded.kdf_memory, kdf_parallelism=excluded.kdf_parallelism, security_stamp=excluded.security_stamp, updated_at=excluded.updated_at'
+      'kdf_type=excluded.kdf_type, kdf_iterations=excluded.kdf_iterations, kdf_memory=excluded.kdf_memory, kdf_parallelism=excluded.kdf_parallelism, disabled=excluded.disabled, security_stamp=excluded.security_stamp, updated_at=excluded.updated_at'
     );
     await this.safeBind(stmt,
       user.id,
@@ -237,6 +296,7 @@ export class StorageService {
       user.kdfIterations,
       user.kdfMemory,
       user.kdfParallelism,
+      user.disabled ? 1 : 0,
       user.securityStamp,
       user.createdAt,
       user.updatedAt
@@ -246,8 +306,8 @@ export class StorageService {
   async createFirstUser(user: User): Promise<boolean> {
     const email = user.email.toLowerCase();
     const stmt = this.db.prepare(
-      'INSERT INTO users(id, email, name, master_password_hash, key, private_key, public_key, kdf_type, kdf_iterations, kdf_memory, kdf_parallelism, security_stamp, created_at, updated_at) ' +
-      'SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ' +
+      'INSERT INTO users(id, email, name, master_password_hash, key, private_key, public_key, kdf_type, kdf_iterations, kdf_memory, kdf_parallelism, disabled, security_stamp, created_at, updated_at) ' +
+      'SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ' +
       'WHERE NOT EXISTS (SELECT 1 FROM users LIMIT 1)'
     );
     const result = await this.safeBind(stmt,
@@ -262,12 +322,87 @@ export class StorageService {
       user.kdfIterations,
       user.kdfMemory,
       user.kdfParallelism,
+      user.disabled ? 1 : 0,
       user.securityStamp,
       user.createdAt,
       user.updatedAt
     ).run();
 
     return (result.meta.changes ?? 0) > 0;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    const res = await this.db
+      .prepare(
+        'SELECT id, email, name, master_password_hash, key, private_key, public_key, kdf_type, kdf_iterations, kdf_memory, kdf_parallelism, disabled, security_stamp, created_at, updated_at ' +
+        'FROM users ORDER BY created_at DESC'
+      )
+      .all<any>();
+
+    return (res.results || []).map(row => ({
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      masterPasswordHash: row.master_password_hash,
+      key: row.key,
+      privateKey: row.private_key,
+      publicKey: row.public_key,
+      kdfType: row.kdf_type,
+      kdfIterations: row.kdf_iterations,
+      kdfMemory: row.kdf_memory ?? undefined,
+      kdfParallelism: row.kdf_parallelism ?? undefined,
+      disabled: !!row.disabled,
+      securityStamp: row.security_stamp,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  async setUserDisabled(userId: string, disabled: boolean): Promise<boolean> {
+    const now = new Date().toISOString();
+    const result = await this.db
+      .prepare('UPDATE users SET disabled = ?, updated_at = ? WHERE id = ?')
+      .bind(disabled ? 1 : 0, now, userId)
+      .run();
+    return (result.meta.changes ?? 0) > 0;
+  }
+
+  async deleteUserById(userId: string): Promise<boolean> {
+    const result = await this.db.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
+    return (result.meta.changes ?? 0) > 0;
+  }
+
+  async deleteRefreshTokensByUser(userId: string): Promise<void> {
+    await this.db.prepare('DELETE FROM refresh_tokens WHERE user_id = ?').bind(userId).run();
+  }
+
+  async deleteTrustedTwoFactorTokensByUser(userId: string): Promise<void> {
+    await this.db.prepare('DELETE FROM trusted_two_factor_device_tokens WHERE user_id = ?').bind(userId).run();
+  }
+
+  async getUserCipherIds(userId: string): Promise<string[]> {
+    const res = await this.db
+      .prepare('SELECT id FROM ciphers WHERE user_id = ?')
+      .bind(userId)
+      .all<{ id: string }>();
+    return (res.results || []).map(row => row.id);
+  }
+
+  async getUserAttachmentRefs(userId: string): Promise<Array<{ cipherId: string; attachmentId: string }>> {
+    const res = await this.db
+      .prepare(
+        `SELECT a.id AS attachment_id, a.cipher_id
+         FROM attachments a
+         INNER JOIN ciphers c ON c.id = a.cipher_id
+         WHERE c.user_id = ?`
+      )
+      .bind(userId)
+      .all<any>();
+
+    return (res.results || []).map(row => ({
+      cipherId: row.cipher_id,
+      attachmentId: row.attachment_id,
+    }));
   }
 
   // --- Ciphers ---
@@ -657,6 +792,11 @@ export class StorageService {
     return `sha256:${digest}`;
   }
 
+  private async adminSessionTokenKey(token: string): Promise<string> {
+    const digest = await this.sha256Hex(token);
+    return `sha256:${digest}`;
+  }
+
   // --- Devices ---
 
   async upsertDevice(userId: string, deviceIdentifier: string, name: string, type: number): Promise<void> {
@@ -737,6 +877,198 @@ export class StorageService {
       return null;
     }
     return row.user_id;
+  }
+
+  // --- Admin sessions ---
+
+  async createAdminSession(token: string, ip: string | null, userAgent: string | null, ttlMs: number): Promise<void> {
+    const now = Date.now();
+    await this.maybeCleanupExpiredAdminSessions(now);
+    const tokenKey = await this.adminSessionTokenKey(token);
+    const expiresAt = now + ttlMs;
+    await this.db
+      .prepare(
+        'INSERT INTO admin_sessions(token, ip, user_agent, created_at, last_seen_at, expires_at) VALUES(?, ?, ?, ?, ?, ?) ' +
+        'ON CONFLICT(token) DO UPDATE SET ip=excluded.ip, user_agent=excluded.user_agent, last_seen_at=excluded.last_seen_at, expires_at=excluded.expires_at'
+      )
+      .bind(tokenKey, ip, userAgent, now, now, expiresAt)
+      .run();
+  }
+
+  async hasValidAdminSession(token: string): Promise<boolean> {
+    const now = Date.now();
+    await this.maybeCleanupExpiredAdminSessions(now);
+    const tokenKey = await this.adminSessionTokenKey(token);
+    const row = await this.db
+      .prepare('SELECT expires_at FROM admin_sessions WHERE token = ?')
+      .bind(tokenKey)
+      .first<{ expires_at: number }>();
+    if (!row) return false;
+    if (row.expires_at < now) {
+      await this.db.prepare('DELETE FROM admin_sessions WHERE token = ?').bind(tokenKey).run();
+      return false;
+    }
+    return true;
+  }
+
+  async touchAdminSession(token: string, ttlMs: number): Promise<void> {
+    const now = Date.now();
+    const tokenKey = await this.adminSessionTokenKey(token);
+    await this.db
+      .prepare('UPDATE admin_sessions SET last_seen_at = ?, expires_at = ? WHERE token = ?')
+      .bind(now, now + ttlMs, tokenKey)
+      .run();
+  }
+
+  async deleteAdminSession(token: string): Promise<void> {
+    const tokenKey = await this.adminSessionTokenKey(token);
+    await this.db.prepare('DELETE FROM admin_sessions WHERE token = ?').bind(tokenKey).run();
+  }
+
+  async countAdminSessions(): Promise<number> {
+    const now = Date.now();
+    await this.maybeCleanupExpiredAdminSessions(now);
+    const row = await this.db.prepare('SELECT COUNT(*) AS total FROM admin_sessions').first<{ total: number }>();
+    return Number(row?.total ?? 0);
+  }
+
+  // --- Admin audit logs ---
+
+  async writeAdminAuditLog(
+    action: string,
+    targetType: string | null,
+    targetId: string | null,
+    ip: string | null,
+    detail: Record<string, unknown> | null
+  ): Promise<void> {
+    const id = generateUUID();
+    const createdAt = new Date().toISOString();
+    const serializedDetail = detail ? JSON.stringify(detail) : null;
+    await this.db
+      .prepare(
+        'INSERT INTO admin_audit_logs(id, action, target_type, target_id, ip, detail, created_at) VALUES(?, ?, ?, ?, ?, ?, ?)'
+      )
+      .bind(id, action, targetType, targetId, ip, serializedDetail, createdAt)
+      .run();
+  }
+
+  async getAdminAuditLogs(limit: number): Promise<AdminAuditLog[]> {
+    const cap = Math.max(1, Math.min(limit, LIMITS.admin.maxAuditRows));
+    const res = await this.db
+      .prepare(
+        'SELECT id, action, target_type, target_id, ip, detail, created_at FROM admin_audit_logs ORDER BY created_at DESC LIMIT ?'
+      )
+      .bind(cap)
+      .all<any>();
+
+    return (res.results || []).map(row => {
+      let parsedDetail: Record<string, unknown> | null = null;
+      if (typeof row.detail === 'string' && row.detail.length > 0) {
+        try {
+          const data = JSON.parse(row.detail) as unknown;
+          parsedDetail = data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+        } catch {
+          parsedDetail = null;
+        }
+      }
+      return {
+        id: row.id,
+        action: row.action,
+        targetType: row.target_type,
+        targetId: row.target_id,
+        ip: row.ip,
+        detail: parsedDetail,
+        createdAt: row.created_at,
+      };
+    });
+  }
+
+  // --- Admin aggregations ---
+
+  async getAdminUsersOverview(): Promise<AdminUserOverview[]> {
+    const res = await this.db
+      .prepare(
+        `SELECT
+           u.id,
+           u.email,
+           u.name,
+           u.disabled,
+           u.created_at,
+           u.updated_at,
+           (SELECT COUNT(*) FROM ciphers c WHERE c.user_id = u.id) AS cipher_count,
+           (SELECT COUNT(*) FROM folders f WHERE f.user_id = u.id) AS folder_count,
+           (SELECT COUNT(*) FROM devices d WHERE d.user_id = u.id) AS device_count,
+           (
+             SELECT COUNT(*)
+             FROM attachments a
+             INNER JOIN ciphers c2 ON c2.id = a.cipher_id
+             WHERE c2.user_id = u.id
+           ) AS attachment_count,
+           (
+             SELECT COALESCE(SUM(a.size), 0)
+             FROM attachments a
+             INNER JOIN ciphers c3 ON c3.id = a.cipher_id
+             WHERE c3.user_id = u.id
+           ) AS attachment_size
+         FROM users u
+         ORDER BY u.created_at DESC`
+      )
+      .all<any>();
+
+    return (res.results || []).map(row => ({
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      disabled: !!row.disabled,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      cipherCount: Number(row.cipher_count ?? 0),
+      folderCount: Number(row.folder_count ?? 0),
+      deviceCount: Number(row.device_count ?? 0),
+      attachmentCount: Number(row.attachment_count ?? 0),
+      attachmentSize: Number(row.attachment_size ?? 0),
+    }));
+  }
+
+  async getAdminOverviewStats(): Promise<AdminOverviewStats> {
+    const [
+      usersTotal,
+      usersDisabled,
+      ciphersTotal,
+      ciphersDeleted,
+      foldersTotal,
+      devicesTotal,
+      attachmentsTotal,
+      attachmentsBytesTotal,
+      adminSessionsTotal,
+    ] = await Promise.all([
+      this.scalarNumber('SELECT COUNT(*) AS total FROM users'),
+      this.scalarNumber('SELECT COUNT(*) AS total FROM users WHERE disabled = 1'),
+      this.scalarNumber('SELECT COUNT(*) AS total FROM ciphers'),
+      this.scalarNumber('SELECT COUNT(*) AS total FROM ciphers WHERE deleted_at IS NOT NULL'),
+      this.scalarNumber('SELECT COUNT(*) AS total FROM folders'),
+      this.scalarNumber('SELECT COUNT(*) AS total FROM devices'),
+      this.scalarNumber('SELECT COUNT(*) AS total FROM attachments'),
+      this.scalarNumber('SELECT COALESCE(SUM(size), 0) AS total FROM attachments'),
+      this.countAdminSessions(),
+    ]);
+
+    return {
+      usersTotal,
+      usersDisabled,
+      ciphersTotal,
+      ciphersDeleted,
+      foldersTotal,
+      devicesTotal,
+      attachmentsTotal,
+      attachmentsBytesTotal,
+      adminSessionsTotal,
+    };
+  }
+
+  private async scalarNumber(query: string): Promise<number> {
+    const row = await this.db.prepare(query).first<{ total: number }>();
+    return Number(row?.total ?? 0);
   }
 
   // --- Revision dates ---

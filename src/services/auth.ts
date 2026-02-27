@@ -57,6 +57,7 @@ export class AuthService {
     // Verify security stamp - ensures token is invalidated after password change
     const user = await this.storage.getUserById(payload.sub);
     if (!user) return null;
+    if (user.disabled) return null;
     
     if (payload.sstamp !== user.securityStamp) {
       return null; // Token was issued before password change
@@ -72,6 +73,7 @@ export class AuthService {
 
     const user = await this.storage.getUserById(userId);
     if (!user) return null;
+    if (user.disabled) return null;
 
     const accessToken = await this.generateAccessToken(user);
     return { accessToken, user };

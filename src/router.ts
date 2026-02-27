@@ -39,6 +39,18 @@ import { handleSync } from './handlers/sync';
 // Setup handlers
 import { handleSetupPage, handleSetupStatus } from './handlers/setup';
 import { handleKnownDevice, handleGetDevices, handleUpdateDeviceToken } from './handlers/devices';
+import {
+  handleAdminPage,
+  handleAdminLogin,
+  handleAdminLogout,
+  handleAdminOverviewApi,
+  handleAdminUsersApi,
+  handleAdminDisableUserApi,
+  handleAdminEnableUserApi,
+  handleAdminDeauthUserApi,
+  handleAdminDeleteUserApi,
+  handleAdminAuditLogsApi,
+} from './handlers/admin';
 
 // Import handler
 import { handleCiphersImport } from './handlers/import';
@@ -169,6 +181,50 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     // Setup page (root)
     if (path === '/' && method === 'GET') {
       return handleSetupPage(request, env);
+    }
+
+    // Admin page and APIs (separate admin session auth)
+    if (path === '/admin' && method === 'GET') {
+      return handleAdminPage(request, env);
+    }
+
+    if (path === '/admin/login' && method === 'POST') {
+      return handleAdminLogin(request, env);
+    }
+
+    if (path === '/admin/logout' && method === 'POST') {
+      return handleAdminLogout(request, env);
+    }
+
+    if (path === '/admin/api/overview' && method === 'GET') {
+      return handleAdminOverviewApi(request, env);
+    }
+
+    if (path === '/admin/api/users' && method === 'GET') {
+      return handleAdminUsersApi(request, env);
+    }
+
+    if (path === '/admin/api/audit-logs' && method === 'GET') {
+      return handleAdminAuditLogsApi(request, env);
+    }
+
+    const adminUserActionMatch = path.match(/^\/admin\/api\/users\/([a-f0-9-]+)\/(disable|enable|deauth|delete)$/i);
+    if (adminUserActionMatch) {
+      const targetUserId = adminUserActionMatch[1];
+      const action = adminUserActionMatch[2].toLowerCase();
+
+      if (action === 'disable' && method === 'POST') {
+        return handleAdminDisableUserApi(request, env, targetUserId);
+      }
+      if (action === 'enable' && method === 'POST') {
+        return handleAdminEnableUserApi(request, env, targetUserId);
+      }
+      if (action === 'deauth' && method === 'POST') {
+        return handleAdminDeauthUserApi(request, env, targetUserId);
+      }
+      if (action === 'delete' && method === 'DELETE') {
+        return handleAdminDeleteUserApi(request, env, targetUserId);
+      }
     }
 
     // Setup status

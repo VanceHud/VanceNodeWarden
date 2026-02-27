@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
   kdf_iterations INTEGER NOT NULL,
   kdf_memory INTEGER,
   kdf_parallelism INTEGER,
+  disabled INTEGER NOT NULL DEFAULT 0,
   security_stamp TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -123,3 +124,24 @@ CREATE TABLE IF NOT EXISTS used_attachment_download_tokens (
   jti TEXT PRIMARY KEY,
   expires_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  token TEXT PRIMARY KEY,
+  ip TEXT,
+  user_agent TEXT,
+  created_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+  id TEXT PRIMARY KEY,
+  action TEXT NOT NULL,
+  target_type TEXT,
+  target_id TEXT,
+  ip TEXT,
+  detail TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created_at ON admin_audit_logs(created_at);
