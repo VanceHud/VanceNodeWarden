@@ -1,7 +1,7 @@
 import { Env } from '../types';
 import { htmlResponse } from '../utils/response';
 
-function renderPublicSendPage(accessId: string, urlB64Key: string): string {
+function renderPublicSendPage(accessId: string, urlB64Key: string | null): string {
   const accessIdJson = JSON.stringify(accessId);
   const urlB64KeyJson = JSON.stringify(urlB64Key);
 
@@ -94,7 +94,7 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
       width: 100%;
       margin-top: 8px;
     }
-    input[type="password"] {
+    input[type="password"], input[type="text"] {
       width: 100%;
       height: 42px;
       border-radius: 10px;
@@ -104,7 +104,7 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
       outline: none;
       background: #fff;
     }
-    input[type="password"]:focus {
+    input[type="password"]:focus, input[type="text"]:focus {
       border-color: #93c5fd;
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
     }
@@ -139,6 +139,19 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
     <h1 id="sendName">加载中...</h1>
     <div class="meta" id="sendMeta"></div>
     <div class="status" id="status"></div>
+
+    <section class="section" id="keySection">
+      <h2>需要解密密钥</h2>
+      <form id="keyForm">
+        <div class="field">
+          <input id="keyInput" type="text" placeholder="粘贴链接中的 key（/#/send/{id}/{key} 的最后一段）" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="row" style="margin-top: 10px;">
+          <button class="primary" id="keySubmit" type="submit">继续</button>
+        </div>
+      </form>
+      <div class="small">如果你打开的是 <code>/#/send/{id}</code>，请补全 key 后再解锁。</div>
+    </section>
 
     <section class="section" id="passwordSection">
       <h2>此 Send 需要密码</h2>
@@ -186,6 +199,8 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
     let keyMaterialBytes = null;
     let encKeyBytes = null;
     let macKeyBytes = null;
+    let derivedKeySource = null;
+    let currentUrlB64Key = typeof URL_B64_KEY === 'string' ? URL_B64_KEY : '';
     let sendPasswordHash = null;
     let activeSend = null;
 
@@ -235,6 +250,20 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
       let base64 = (urlB64 || '').replace(/-/g, '+').replace(/_/g, '/');
       while (base64.length % 4 !== 0) base64 += '=';
       return base64ToBytes(base64);
+    }
+
+    function normalizeUrlB64Key(value) {
+      if (typeof value !== 'string') return '';
+      const trimmed = value.trim().replace(/^\/+|\/+$/g, '');
+      return trimmed;
+    }
+
+    function syncPathWithResolvedKey() {
+      if (!currentUrlB64Key) return;
+      const nextPath = '/send/' + encodeURIComponent(ACCESS_ID) + '/' + encodeURIComponent(currentUrlB64Key);
+      if (window.location.pathname !== nextPath) {
+        history.replaceState(null, '', nextPath);
+      }
     }
 
     function constantTimeEqual(a, b) {
@@ -343,8 +372,18 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
       throw new Error('Unsupported encrypted file type');
     }
 
-    async function deriveSendKeys() {
-      keyMaterialBytes = urlB64ToBytes(URL_B64_KEY);
+    async function ensureDerivedSendKeys() {
+      const normalizedKey = normalizeUrlB64Key(currentUrlB64Key);
+      if (!normalizedKey) {
+        throw new Error('MISSING_KEY');
+      }
+
+      currentUrlB64Key = normalizedKey;
+      if (derivedKeySource === currentUrlB64Key && keyMaterialBytes && encKeyBytes && macKeyBytes) {
+        return;
+      }
+
+      keyMaterialBytes = urlB64ToBytes(currentUrlB64Key);
       const hkdfKey = await crypto.subtle.importKey('raw', keyMaterialBytes, 'HKDF', false, ['deriveBits']);
       const bits = await crypto.subtle.deriveBits(
         {
@@ -359,6 +398,7 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
       const keyBytes = new Uint8Array(bits);
       encKeyBytes = keyBytes.slice(0, 32);
       macKeyBytes = keyBytes.slice(32, 64);
+      derivedKeySource = currentUrlB64Key;
     }
 
     async function hashSendPassword(rawPassword) {
@@ -383,6 +423,7 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
     }
 
     function clearSections() {
+      show(byId('keySection'), false);
       show(byId('passwordSection'), false);
       show(byId('textSection'), false);
       show(byId('fileSection'), false);
@@ -390,6 +431,24 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
 
     async function loadSend() {
       clearSections();
+
+      currentUrlB64Key = normalizeUrlB64Key(currentUrlB64Key);
+      if (!currentUrlB64Key) {
+        show(byId('keySection'), true);
+        setStatus('链接缺少解密 key，请补全后再继续。', true);
+        return;
+      }
+
+      try {
+        await ensureDerivedSendKeys();
+        syncPathWithResolvedKey();
+      } catch (error) {
+        console.error(error);
+        show(byId('keySection'), true);
+        setStatus('解密 key 无效，请检查链接是否完整。', true);
+        return;
+      }
+
       setStatus('正在加载 Send ...', false);
 
       const requestBody = sendPasswordHash ? { password: sendPasswordHash } : {};
@@ -408,10 +467,15 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
 
       if (response.status === 401) {
         show(byId('passwordSection'), true);
-        setStatus('需要密码才能访问该 Send。', true);
+        if (sendPasswordHash) {
+          setStatus('密码无效，请重新输入。', true);
+        } else {
+          setStatus('需要密码才能访问该 Send。', true);
+        }
         return;
       }
       if (response.status === 400) {
+        sendPasswordHash = null;
         show(byId('passwordSection'), true);
         setStatus('密码错误，请重试。', true);
         return;
@@ -488,6 +552,8 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
       }
 
       show(byId('passwordSection'), false);
+      const passwordInput = byId('passwordInput');
+      if (passwordInput) passwordInput.value = '';
       setStatus('Send 已解锁。', false);
     }
 
@@ -522,6 +588,7 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
         return;
       }
       if (response.status === 400) {
+        sendPasswordHash = null;
         show(byId('passwordSection'), true);
         setStatus('密码错误，无法下载文件。', true);
         return;
@@ -555,6 +622,35 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
 
       setStatus('下载完成。', false);
     }
+
+    byId('keyForm').addEventListener('submit', async function (event) {
+      event.preventDefault();
+      const submitBtn = byId('keySubmit');
+      const input = byId('keyInput');
+      const keyValue = normalizeUrlB64Key((input.value || '').trim());
+      if (!keyValue) {
+        setStatus('请输入解密 key。', true);
+        return;
+      }
+
+      submitBtn.disabled = true;
+      try {
+        currentUrlB64Key = keyValue;
+        derivedKeySource = null;
+        keyMaterialBytes = null;
+        encKeyBytes = null;
+        macKeyBytes = null;
+        sendPasswordHash = null;
+        const passwordInput = byId('passwordInput');
+        if (passwordInput) passwordInput.value = '';
+        await loadSend();
+      } catch (error) {
+        console.error(error);
+        setStatus('解锁失败，请检查 key。', true);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
 
     byId('passwordForm').addEventListener('submit', async function (event) {
       event.preventDefault();
@@ -605,7 +701,19 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
 
     (async function init() {
       try {
-        await deriveSendKeys();
+        currentUrlB64Key = normalizeUrlB64Key(currentUrlB64Key);
+        const keyInput = byId('keyInput');
+        if (keyInput && currentUrlB64Key) {
+          keyInput.value = currentUrlB64Key;
+        }
+
+        if (!currentUrlB64Key) {
+          show(byId('keySection'), true);
+          byId('sendName').textContent = '需要解密 key';
+          setStatus('链接不完整：缺少解密 key。', true);
+          return;
+        }
+
         await loadSend();
       } catch (error) {
         console.error(error);
@@ -618,19 +726,19 @@ function renderPublicSendPage(accessId: string, urlB64Key: string): string {
 </html>`;
 }
 
-// GET /send/:accessId/:urlB64Key
+// GET /send/:accessId/:urlB64Key?
 export async function handlePublicSendPage(
   request: Request,
   env: Env,
   accessId: string,
-  urlB64Key: string
+  urlB64Key?: string | null
 ): Promise<Response> {
   void request;
   void env;
 
-  if (!accessId || !urlB64Key) {
+  if (!accessId) {
     return htmlResponse('Invalid Send URL', 400);
   }
 
-  return htmlResponse(renderPublicSendPage(accessId, urlB64Key));
+  return htmlResponse(renderPublicSendPage(accessId, urlB64Key ?? null));
 }

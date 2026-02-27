@@ -188,10 +188,10 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
 
     // Public Send page (recipient-facing)
-    const publicSendPageMatch = path.match(/^\/send\/([^/]+)\/([^/]+)\/?$/i);
+    const publicSendPageMatch = path.match(/^\/send\/([^/]+)(?:\/([^/]+))?\/?$/i);
     if (publicSendPageMatch && method === 'GET') {
       const accessId = decodeURIComponent(publicSendPageMatch[1]);
-      const urlB64Key = decodeURIComponent(publicSendPageMatch[2]);
+      const urlB64Key = publicSendPageMatch[2] ? decodeURIComponent(publicSendPageMatch[2]) : null;
       return handlePublicSendPage(request, env, accessId, urlB64Key);
     }
 
